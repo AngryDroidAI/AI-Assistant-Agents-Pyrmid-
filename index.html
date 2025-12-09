@@ -1,0 +1,1885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capsule Chat Interface</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.5/dist/purify.min.js"></script>
+  <style>
+    :root {
+      --primary-gradient: linear-gradient(135deg, #4e54c8, #8f94fb);
+      --secondary-gradient: linear-gradient(135deg, #b21f1f, #ff5e62);
+      --background-gradient: linear-gradient(135deg, #1a2a6c, #b21f1f, #1a2a6c);
+      --card-bg: rgba(255, 255, 255, 0.1);
+      --text-color: white;
+      --border-radius: 20px;
+      --transition-speed: 0.3s;
+      --tier-local: #4e54c8;
+      --tier-cloud: #ff6b6b;
+      --tier-premium: #ffd93d;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background: var(--background-gradient);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      color: var(--text-color);
+      overflow: hidden;
+    }
+
+    .multi-agent-container {
+      display: flex;
+      width: 100%;
+      max-width: 1400px;
+      height: 90vh;
+      gap: 20px;
+    }
+
+    .agents-panel, .chat-container {
+      background: var(--card-bg);
+      backdrop-filter: blur(10px);
+      border-radius: var(--border-radius);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .agents-panel {
+      width: 300px;
+    }
+
+    .chat-container {
+      flex: 1;
+    }
+
+    .agents-header, .chat-header {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 20px;
+      text-align: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      position: relative;
+    }
+
+    .agents-header h2, .chat-header h1 {
+      font-size: 1.5rem;
+      margin-bottom: 5px;
+    }
+
+    .agents-header p, .chat-header p {
+      font-size: 0.9rem;
+      opacity: 0.7;
+      margin: 5px 0;
+    }
+
+    .agents-controls, .chat-input {
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.2);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .agents-controls {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    select, input[type="text"], button {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.15);
+      color: var(--text-color);
+      font-size: 0.95rem;
+      outline: none;
+      transition: all var(--transition-speed) ease;
+    }
+
+    select:focus, input[type="text"]:focus {
+      background: rgba(255, 255, 255, 0.25);
+      box-shadow: 0 0 0 2px rgba(78, 84, 200, 0.5);
+    }
+
+    button {
+      background: var(--primary-gradient);
+      border: none;
+      color: var(--text-color);
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    button:hover:not(:disabled) {
+      transform: scale(1.03);
+      box-shadow: 0 5px 15px rgba(78, 84, 200, 0.4);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .active-agents-list {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .agent-item {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all var(--transition-speed) ease;
+      animation: slideIn 0.3s ease-out;
+      position: relative;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    .agent-item:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .agent-item .agent-info {
+      flex: 1;
+    }
+
+    .agent-item .agent-name {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+
+    .agent-item .agent-model {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      word-break: break-all;
+    }
+
+    .agent-item .remove-agent {
+      width: 30px;
+      height: 30px;
+      background: rgba(178, 31, 31, 0.7);
+      border-radius: 50%;
+      margin-top: 0;
+      flex-shrink: 0;
+    }
+
+    .agent-item .remove-agent:hover {
+      background: rgba(178, 31, 31, 1);
+    }
+
+    .agents-count {
+      padding: 15px;
+      text-align: center;
+      font-size: 0.9rem;
+      opacity: 0.7;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .no-active-agents {
+      text-align: center;
+      padding: 20px;
+      opacity: 0.7;
+    }
+
+    .chat-messages {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .message {
+      max-width: 80%;
+      padding: 15px;
+      border-radius: 18px;
+      line-height: 1.5;
+      animation: fadeIn var(--transition-speed) ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .user-message {
+      background: var(--primary-gradient);
+      align-self: flex-end;
+      border-bottom-right-radius: 5px;
+    }
+
+    .ai-message {
+      background: rgba(255, 255, 255, 0.15);
+      align-self: flex-start;
+      border-bottom-left-radius: 5px;
+    }
+
+    .message-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      opacity: 0.9;
+    }
+
+    .message-header i {
+      margin-right: 5px;
+      font-size: 0.75rem;
+    }
+
+    .message-content {
+      font-size: 1rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .message-content h1, .message-content h2, .message-content h3,
+    .message-content h4, .message-content h5, .message-content h6 {
+      margin: 10px 0 5px 0;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .message-content p {
+      margin: 8px 0;
+    }
+
+    .message-content code {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9em;
+    }
+
+    .message-content pre {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 12px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 10px 0;
+    }
+
+    .message-content pre code {
+      background: none;
+      padding: 0;
+    }
+
+    .message-content blockquote {
+      border-left: 3px solid rgba(255, 255, 255, 0.5);
+      padding-left: 12px;
+      margin: 10px 0;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .typing-indicator {
+      display: none;
+      background: rgba(255, 255, 255, 0.15);
+      align-self: flex-start;
+      padding: 15px;
+      border-radius: 18px;
+      border-bottom-left-radius: 5px;
+      margin: 0 20px 10px 20px;
+    }
+
+    .typing-indicator span {
+      height: 10px;
+      width: 10px;
+      float: left;
+      margin: 0 2px;
+      background-color: rgba(255, 255, 255, 0.7);
+      border-radius: 50%;
+      opacity: 0.4;
+      animation: typing 1s infinite;
+    }
+
+    .typing-indicator span:nth-of-type(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-of-type(3) { animation-delay: 0.4s; }
+
+    @keyframes typing {
+      0% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+      100% { transform: translateY(0); }
+    }
+
+    .chat-input {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .chat-input input[type="text"] {
+      flex: 1;
+      padding: 15px 20px;
+      border-radius: 30px;
+    }
+
+    .chat-input button {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      margin-top: 0;
+      flex-shrink: 0;
+      font-size: 1.2rem;
+    }
+
+    .chat-input button:hover {
+      transform: scale(1.05);
+    }
+
+    #upload-button, #tools-button, #speak-button {
+      width: 40px;
+      height: 40px;
+      font-size: 1rem;
+    }
+
+    .speak-active {
+      background: var(--secondary-gradient) !important;
+      box-shadow: 0 0 10px rgba(178, 31, 31, 0.7) !important;
+    }
+
+    .tools-menu, .chat-history-menu {
+      display: none;
+      position: absolute;
+      bottom: 90px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 15px;
+      border-radius: 12px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+      color: white;
+      font-size: 0.9rem;
+      min-width: 220px;
+      z-index: 10;
+    }
+
+    .chat-history-menu {
+      bottom: 140px;
+      width: 250px;
+    }
+
+    .tools-menu h4, .chat-history-menu h4 {
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .tools-menu label, .chat-menu button, .chat-menu input {
+      display: block;
+      margin-bottom: 8px;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    .chat-menu button {
+      background: var(--primary-gradient);
+      border: none;
+      color: white;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      transition: all var(--transition-speed) ease;
+    }
+
+    .chat-menu button:hover {
+      transform: scale(1.02);
+      box-shadow: 0 0 10px rgba(78, 84, 200, 0.5);
+    }
+
+    .chat-menu input {
+      padding: 8px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      margin-bottom: 10px;
+    }
+
+    .chat-menu input::placeholder {
+      color: rgba(255,255,255,0.6);
+    }
+
+    .message img, .message video {
+      max-width: 100%;
+      border-radius: 12px;
+      margin-top: 10px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+
+    .message video {
+      max-height: 300px;
+    }
+
+    .history-button {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: white;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 1rem;
+      transition: all var(--transition-speed) ease;
+    }
+
+    .history-button:hover {
+      background: rgba(255,255,255,0.25);
+      transform: scale(1.05);
+    }
+
+    .saved-chats-list {
+      max-height: 150px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+
+    .saved-chat-item {
+      padding: 8px;
+      border-radius: 5px;
+      margin-bottom: 5px;
+      background: rgba(255,255,255,0.1);
+      cursor: pointer;
+      transition: all var(--transition-speed) ease;
+    }
+
+    .saved-chat-item:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    .agent-typing {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      padding-left: 20px;
+      animation: fadeIn var(--transition-speed) ease-out;
+    }
+
+    .agent-typing .agent-name {
+      font-weight: bold;
+      opacity: 0.8;
+    }
+
+    .agent-typing .typing-dots {
+      display: flex;
+      gap: 3px;
+    }
+
+    .agent-typing .typing-dots span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.7);
+      display: inline-block;
+      animation: bounce 1.5s infinite ease-in-out;
+    }
+
+    .agent-typing .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .agent-typing .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+
+    .error-message {
+      background: rgba(178,31,31,0.3) !important;
+      border: 1px solid rgba(178,31,31,0.5);
+    }
+
+    .success-message {
+      background: rgba(46,204,113,0.3) !important;
+      border: 1px solid rgba(46,204,113,0.5);
+    }
+
+    /* Tier badges */
+    .tier-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      margin-left: 8px;
+      text-transform: uppercase;
+    }
+
+    .tier-local { background: var(--tier-local); }
+    .tier-cloud { background: var(--tier-cloud); }
+    .tier-premium { background: var(--tier-premium); }
+
+    /* Metrics panel */
+    .metrics-panel {
+      position: absolute;
+      top: 20px;
+      right: 70px;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 15px;
+      color: white;
+      font-size: 0.85rem;
+      width: 280px;
+      display: none;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .metrics-panel h4 {
+      margin-bottom: 10px;
+      color: rgba(255,255,255,0.9);
+    }
+
+    .metric-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .metric-label {
+      opacity: 0.8;
+    }
+
+    .metric-value {
+      font-weight: bold;
+    }
+
+    .metrics-button {
+      position: absolute;
+      top: 20px;
+      right: 120px;
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: white;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 1rem;
+      transition: all var(--transition-speed) ease;
+    }
+
+    .metrics-button:hover {
+      background: rgba(255,255,255,0.25);
+      transform: scale(1.05);
+    }
+
+    /* Budget indicator */
+    .budget-indicator {
+      position: absolute;
+      top: 5px;
+      right: 10px;
+      font-size: 0.7rem;
+      opacity: 0.8;
+    }
+
+    .budget-warning {
+      color: #ff6b6b;
+    }
+
+    .budget-exceeded {
+      color: #ff0000;
+      font-weight: bold;
+    }
+
+    /* Pyramid chart styling */
+    #pyramid-chart {
+      margin-top: 15px;
+      text-align: center;
+    }
+
+    #pyramid-chart svg {
+      filter: drop-shadow(0 0 8px rgba(78, 84, 200, 0.4));
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(255,255,255,0.1);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.3);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255,255,255,0.5);
+    }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+      .multi-agent-container {
+        flex-direction: column;
+        height: 100vh;
+      }
+      
+      .agents-panel {
+        width: 100%;
+        height: 200px;
+      }
+      
+      .chat-container {
+        flex: 1;
+      }
+
+      .metrics-panel {
+        right: 20px;
+        left: 20px;
+        width: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="multi-agent-container">
+    <!-- Agents Panel -->
+    <div class="agents-panel">
+      <div class="agents-header">
+        <h2><i class="fas fa-robot"></i> Active Agents</h2>
+        <p>Add models to assist the primary AI</p>
+      </div>
+      
+      <div class="agents-controls">
+        <select id="agent-model-select" aria-label="Select agent model">
+          <option value="driaforall/tiny-agent-a:0.5b">driaforall/tiny-agent-a:0.5b</option>
+          <option value="hhao/qwen2.5-coder-tools:0.5b">hhao/qwen2.5-coder-tools:0.5b</option>
+          <option value="qwen:0.5b">qwen:0.5b</option>
+          <option value="tinydolphin:1.1b">tinydolphin:1.1b</option>
+          <option value="tinyllama:1.1b">tinyllama:1.1b</option>
+          <option value="deepseek-r1:1.5b">deepseek-r1:1.5b</option>
+          <option value="nehcgs/Arch-Agent:1.5b">nehcgs/Arch-Agent:1.5b</option>
+          <option value="granite3.2-vision:2b">granite3.2-vision:2b</option>
+          <option value="starcoder:3b">starcoder:3b</option>
+          <option value="deepseek-ocr:3b">deepseek-ocr:3b</option>
+          <option value="granite-code:3b">granite-code:3b</option>
+          <option value="gemma3:4b">gemma3:4b</option>
+          <option value="alibayram/hunyuan:4b">alibayram/hunyuan:4b</option>
+          <option value="nemotron-mini:4b">nemotron-mini:4b</option>
+          <option value="codellama:7b">codellama:7b</option>
+          <option value="dolphincoder:7b">dolphincoder:7b</option>
+          <option value="codegemma:7b">codegemma:7b</option>
+          <option value="wizardlm2:7b">wizardlm2:7b</option>
+          <option value="qwen2.5-coder:7b">qwen2.5-coder:7b</option>
+          <option value="sam860/granite-4.0:7b">sam860/granite-4.0:7b</option>
+          <option value="granite4:latest">granite4:latest</option>
+          <option value="opencoder:8b">opencoder:8b</option>
+          <option value="llama3-chatqa:8b">llama3-chatqa:8b</option>
+          <option value="sylink/sylink:8b">sylink/sylink:8b</option>
+          <option value="qwen3:8b">qwen3:8b</option>
+          <option value="deepseek-r1:8b">deepseek-r1:8b</option>
+          <option value="ministral-3:8b">ministral-3:8b</option>
+          <option value="qwen3-vl:8b">qwen3-vl:8b</option>
+          <option value="koesn/llama3-openbiollm-8b:q6_K">koesn/llama3-openbiollm-8b:q6_K</option>
+          <option value="granite3.3:8b">granite3.3:8b</option>
+          <option value="llama3.2-vision:11b">llama3.2-vision:11b</option>
+          <option value="ishumilin/deepseek-r1-coder-tools:14b">ishumilin/deepseek-r1-coder-tools:14b</option>
+          <option value="deepseek-coder-v2:16b">deepseek-coder-v2:16b</option>
+          <option value="second_constantine/gpt-oss-u:20b">second_constantine/gpt-oss-u:20b</option>
+          <option value="gpt-oss:20b">gpt-oss:20b</option>
+          <option value="ALIENTELLIGENCE/multiagentv2:latest">ALIENTELLIGENCE/multiagentv2:latest</option>
+          <option value="gemma3:27b-cloud">gemma3:27b-cloud</option>
+          <option value="qwen3-vl:235b-cloud">qwen3-vl:235b-cloud</option>
+          <option value="glm-4.6:cloud">glm-4.6:cloud</option>
+          <option value="minimax-m2:cloud">minimax-m2:cloud</option>
+          <option value="gemini-3-pro-preview:latest">gemini-3-pro-preview:latest</option>
+          <option value="gpt-oss:120b-cloud">gpt-oss:120b-cloud</option>
+          <option value="qwen3-coder:480b-cloud">qwen3-coder:480b-cloud</option>
+          <option value="cogito-2.1:671b-cloud">cogito-2.1:671b-cloud</option>
+          <option value="deepseek-v3.1:671b-cloud">deepseek-v3.1:671b-cloud</option>
+          <option value="mistral-large-3:675b-cloud">mistral-large-3:675b-cloud</option>
+          <option value="kimi-k2-thinking:cloud">kimi-k2-thinking:cloud</option>
+        </select>
+        <button id="add-agent-btn" aria-label="Add assistant agent">
+          <i class="fas fa-plus"></i> Add Assistant
+        </button>
+      </div>
+      
+      <div class="active-agents-list" id="active-agents-list" role="list">
+        <div class="no-active-agents">No assistant agents added yet</div>
+      </div>
+      
+      <div class="agents-count">
+        <span id="agents-count">0 assistants</span>
+      </div>
+    </div>
+
+    <!-- Chat Container -->
+    <div class="chat-container">
+      <div class="chat-header">
+        <h1><i class="fas fa-robot"></i> AI Assistant</h1>
+        <p>Powered by Capsule Backend</p>
+        <select id="primary-model-select" aria-label="Select primary model">
+          <option value="driaforall/tiny-agent-a:0.5b">driaforall/tiny-agent-a:0.5b</option>
+          <option value="hhao/qwen2.5-coder-tools:0.5b">hhao/qwen2.5-coder-tools:0.5b</option>
+          <option value="qwen:0.5b">qwen:0.5b</option>
+          <option value="tinydolphin:1.1b">tinydolphin:1.1b</option>
+          <option value="tinyllama:1.1b">tinyllama:1.1b</option>
+          <option value="deepseek-r1:1.5b">deepseek-r1:1.5b</option>
+          <option value="nehcgs/Arch-Agent:1.5b">nehcgs/Arch-Agent:1.5b</option>
+          <option value="granite3.2-vision:2b">granite3.2-vision:2b</option>
+          <option value="starcoder:3b">starcoder:3b</option>
+          <option value="deepseek-ocr:3b">deepseek-ocr:3b</option>
+          <option value="granite-code:3b">granite-code:3b</option>
+          <option value="gemma3:4b">gemma3:4b</option>
+          <option value="alibayram/hunyuan:4b">alibayram/hunyuan:4b</option>
+          <option value="nemotron-mini:4b">nemotron-mini:4b</option>
+          <option value="codellama:7b">codellama:7b</option>
+          <option value="dolphincoder:7b">dolphincoder:7b</option>
+          <option value="codegemma:7b">codegemma:7b</option>
+          <option value="wizardlm2:7b">wizardlm2:7b</option>
+          <option value="qwen2.5-coder:7b">qwen2.5-coder:7b</option>
+          <option value="sam860/granite-4.0:7b">sam860/granite-4.0:7b</option>
+          <option value="granite4:latest">granite4:latest</option>
+          <option value="opencoder:8b">opencoder:8b</option>
+          <option value="llama3-chatqa:8b">llama3-chatqa:8b</option>
+          <option value="sylink/sylink:8b">sylink/sylink:8b</option>
+          <option value="qwen3:8b">qwen3:8b</option>
+          <option value="deepseek-r1:8b">deepseek-r1:8b</option>
+          <option value="ministral-3:8b">ministral-3:8b</option>
+          <option value="qwen3-vl:8b">qwen3-vl:8b</option>
+          <option value="koesn/llama3-openbiollm-8b:q6_K">koesn/llama3-openbiollm-8b:q6_K</option>
+          <option value="granite3.3:8b">granite3.3:8b</option>
+          <option value="llama3.2-vision:11b">llama3.2-vision:11b</option>
+          <option value="ishumilin/deepseek-r1-coder-tools:14b">ishumilin/deepseek-r1-coder-tools:14b</option>
+          <option value="deepseek-coder-v2:16b">deepseek-coder-v2:16b</option>
+          <option value="second_constantine/gpt-oss-u:20b">second_constantine/gpt-oss-u:20b</option>
+          <option value="gpt-oss:20b">gpt-oss:20b</option>
+          <option value="ALIENTELLIGENCE/multiagentv2:latest">ALIENTELLIGENCE/multiagentv2:latest</option>
+          <option value="gemma3:27b-cloud">gemma3:27b-cloud</option>
+          <option value="qwen3-vl:235b-cloud">qwen3-vl:235b-cloud</option>
+          <option value="glm-4.6:cloud">glm-4.6:cloud</option>
+          <option value="minimax-m2:cloud">minimax-m2:cloud</option>
+          <option value="gemini-3-pro-preview:latest">gemini-3-pro-preview:latest</option>
+          <option value="gpt-oss:120b-cloud">gpt-oss:120b-cloud</option>
+          <option value="qwen3-coder:480b-cloud">qwen3-coder:480b-cloud</option>
+          <option value="cogito-2.1:671b-cloud">cogito-2.1:671b-cloud</option>
+          <option value="deepseek-v3.1:671b-cloud">deepseek-v3.1:671b-cloud</option>
+          <option value="mistral-large-3:675b-cloud">mistral-large-3:675b-cloud</option>
+          <option value="kimi-k2-thinking:cloud">kimi-k2-thinking:cloud</option>
+        </select>
+        <button class="metrics-button" id="metrics-button" aria-label="Show metrics">
+          <i class="fas fa-chart-line"></i>
+        </button>
+        <button class="history-button" id="history-button" aria-label="Chat history">
+          <i class="fas fa-history"></i>
+        </button>
+      </div>
+      
+      <div class="metrics-panel" id="metrics-panel" role="dialog" aria-label="Performance metrics">
+        <h4>Agent Performance Metrics</h4>
+        <div id="metrics-content"></div>
+        <div id="pyramid-chart"></div>
+      </div>
+      
+      <div class="chat-messages" id="chat-messages" role="log" aria-live="polite">
+        <div class="message ai-message">
+          <div class="message-header">
+            <i class="fas fa-robot"></i> System
+          </div>
+          <div class="message-content">
+            Welcome to the multi-agent chat interface! Select a primary model and add assistants from the panel on the left. All agents will respond to your messages.
+          </div>
+        </div>
+      </div>
+      
+      <div id="typing-agents" aria-live="polite"></div>
+      
+      <div class="chat-input">
+        <button id="upload-button" aria-label="Upload file">
+          <i class="fas fa-plus"></i>
+        </button>
+        <button id="tools-button" aria-label="Tools">
+          <i class="fas fa-cogs"></i>
+        </button>
+        <button id="speak-button" aria-label="Text to speech">
+          <i class="fas fa-volume-up"></i>
+        </button>
+        <input type="file" id="file-upload" accept="image/*,video/*" style="display:none" aria-hidden="true">
+        <input type="text" id="user-input" placeholder="Type your message here..." aria-label="Message input">
+        <button id="send-button" aria-label="Send message">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
+      
+      <div id="tools-menu" class="tools-menu" role="menu">
+        <h4>Tool Options</h4>
+        <label><input type="checkbox" id="use-search-web"> Use Web Search</label>
+        <label><input type="checkbox" id="use-terminal-ssh"> Use Terminal/SSH</label>
+        <label><input type="checkbox" id="use-vision"> Use Vision (if model supports)</label>
+        <label><input type="checkbox" id="auto-speak"> Auto Speak Responses</label>
+      </div>
+      
+      <div id="chat-history-menu" class="chat-history-menu" role="menu">
+        <h4>Chat History</h4>
+        <input type="text" id="chat-name" placeholder="Enter chat name...">
+        <button id="save-chat-button">
+          <i class="fas fa-save"></i> Save Current Chat
+        </button>
+        <button id="load-chat-button">
+          <i class="fas fa-folder-open"></i> Load Chat from File
+        </button>
+        <div class="saved-chats-list" id="saved-chats-list"></div>
+      </div>
+      
+      <input type="file" id="load-chat-file" accept=".json" style="display:none" aria-hidden="true">
+    </div>
+  </div>
+
+  <script>
+    // Debounce utility
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
+
+    // Model tier mapping
+    const modelTiers = {
+      // Local models (0-20B)
+      'driaforall/tiny-agent-a:0.5b': { tier: 'local', color: '#4e54c8', maxTokens: 2048, costPerToken: 0 },
+      'hhao/qwen2.5-coder-tools:0.5b': { tier: 'local', color: '#4e54c8', maxTokens: 2048, costPerToken: 0 },
+      'qwen:0.5b': { tier: 'local', color: '#4e54c8', maxTokens: 2048, costPerToken: 0 },
+      'tinydolphin:1.1b': { tier: 'local', color: '#4e54c8', maxTokens: 2048, costPerToken: 0 },
+      'tinyllama:1.1b': { tier: 'local', color: '#4e54c8', maxTokens: 2048, costPerToken: 0 },
+      'deepseek-r1:1.5b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'nehcgs/Arch-Agent:1.5b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'granite3.2-vision:2b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'starcoder:3b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'deepseek-ocr:3b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'granite-code:3b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'gemma3:4b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'alibayram/hunyuan:4b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'nemotron-mini:4b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'codellama:7b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'dolphincoder:7b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'codegemma:7b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'wizardlm2:7b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'qwen2.5-coder:7b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'sam860/granite-4.0:7b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'granite4:latest': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'opencoder:8b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'llama3-chatqa:8b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'sylink/sylink:8b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'qwen3:8b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'deepseek-r1:8b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'ministral-3:8b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'qwen3-vl:8b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'koesn/llama3-openbiollm-8b:q6_K': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'granite3.3:8b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'llama3.2-vision:11b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'ishumilin/deepseek-r1-coder-tools:14b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'deepseek-coder-v2:16b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'second_constantine/gpt-oss-u:20b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'gpt-oss:20b': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+      'ALIENTELLIGENCE/multiagentv2:latest': { tier: 'local', color: '#4e54c8', maxTokens: 4096, costPerToken: 0 },
+
+      // Cloud models
+      'gemma3:27b-cloud': { tier: 'cloud', color: '#ff6b6b', maxTokens: 8192, costPerToken: 0.001 },
+      'qwen3-vl:235b-cloud': { tier: 'cloud', color: '#ff6b6b', maxTokens: 8192, costPerToken: 0.001 },
+      'glm-4.6:cloud': { tier: 'cloud', color: '#ff6b6b', maxTokens: 8192, costPerToken: 0.001 },
+      'minimax-m2:cloud': { tier: 'cloud', color: '#ff6b6b', maxTokens: 8192, costPerToken: 0.001 },
+      'gemini-3-pro-preview:latest': { tier: 'cloud', color: '#ff6b6b', maxTokens: 8192, costPerToken: 0.001 },
+      'gpt-oss:120b-cloud': { tier: 'cloud', color: '#ff6b6b', maxTokens: 8192, costPerToken: 0.001 },
+      'qwen3-coder:480b-cloud': { tier: 'cloud', color: '#ff6b6b', maxTokens: 8192, costPerToken: 0.001 },
+      'cogito-2.1:671b-cloud': { tier: 'cloud', color: '#ff6b6b', maxTokens: 8192, costPerToken: 0.001 },
+      'deepseek-v3.1:671b-cloud': { tier: 'cloud', color: '#ff6b6b', maxTokens: 8192, costPerToken: 0.001 },
+      'mistral-large-3:675b-cloud': { tier: 'cloud', color: '#ff6b6b', maxTokens: 8192, costPerToken: 0.001 },
+      'kimi-k2-thinking:cloud': { tier: 'premium', color: '#ffd93d', maxTokens: 8192, costPerToken: 0.002 }
+    };
+
+    // DOM elements
+    const elements = {
+      chatMessages: document.getElementById('chat-messages'),
+      userInput: document.getElementById('user-input'),
+      sendButton: document.getElementById('send-button'),
+      uploadButton: document.getElementById('upload-button'),
+      fileUpload: document.getElementById('file-upload'),
+      toolsButton: document.getElementById('tools-button'),
+      toolsMenu: document.getElementById('tools-menu'),
+      primaryModelSelect: document.getElementById('primary-model-select'),
+      agentModelSelect: document.getElementById('agent-model-select'),
+      addAgentBtn: document.getElementById('add-agent-btn'),
+      activeAgentsList: document.getElementById('active-agents-list'),
+      agentsCount: document.getElementById('agents-count'),
+      speakButton: document.getElementById('speak-button'),
+      historyButton: document.getElementById('history-button'),
+      chatHistoryMenu: document.getElementById('chat-history-menu'),
+      saveChatButton: document.getElementById('save-chat-button'),
+      loadChatButton: document.getElementById('load-chat-button'),
+      chatNameInput: document.getElementById('chat-name'),
+      savedChatsList: document.getElementById('saved-chats-list'),
+      loadChatFile: document.getElementById('load-chat-file'),
+      typingAgents: document.getElementById('typing-agents'),
+      metricsButton: document.getElementById('metrics-button'),
+      metricsPanel: document.getElementById('metrics-panel'),
+      metricsContent: document.getElementById('metrics-content')
+    };
+
+    // State management
+    const state = {
+      isSpeaking: false,
+      chatHistory: [],
+      activeAgents: [],
+      agentIdCounter: 1,
+      isProcessing: false,
+      responseQueues: {},
+      synth: window.speechSynthesis,
+      agentMetrics: new Map(),
+      messageVirtualization: {
+        enabled: true,
+        maxMessages: 50,
+        virtualizedMessages: [],
+        visibleStart: 0,
+        visibleEnd: 0
+      },
+      agentBudgets: new Map(),
+      globalBudget: {
+        maxCost: 10.0,
+        currentCost: 0,
+        tokens: 0
+      }
+    };
+
+    // Configure marked.js
+    marked.setOptions({
+      breaks: true,
+      gfm: true,
+      sanitize: false,
+      highlight: function(code, lang) {
+        return `<code class="language-${lang}">${code}</code>`;
+      }
+    });
+
+    // Agent name generator
+    function getAgentName(model) {
+      const modelNames = {
+        'gemma3:4b': 'Gemma Assistant',
+        'qwen3:8b': 'Qwen Assistant',
+        'llama3.2-vision:11b': 'Llama Vision',
+        'deepseek-r1:8b': 'DeepSeek Assistant',
+        'wizardlm2:7b': 'Wizard Assistant',
+        'codellama:7b': 'CodeLlama Assistant',
+        'tinyllama:1.1b': 'TinyLlama Assistant',
+        'tinydolphin:1.1b': 'TinyDolphin Assistant'
+      };
+      return modelNames[model] || model.split(':')[0].split('/').pop() + ' Assistant';
+    }
+
+    // Get tier badge HTML
+    function getTierBadge(model) {
+      const tierInfo = modelTiers[model] || { tier: 'local', color: '#4e54c8' };
+      return `<span class="tier-badge tier-${tierInfo.tier}" style="background: ${tierInfo.color}">${tierInfo.tier}</span>`;
+    }
+
+    // Budget functions
+    function initBudget(agentId, model, maxCalls = 100) {
+      if (!state.agentBudgets.has(agentId)) {
+        const tierInfo = modelTiers[model] || { costPerToken: 0, maxTokens: 2048 };
+        state.agentBudgets.set(agentId, { 
+          calls: 0, 
+          maxCalls, 
+          cost: 0,
+          tokensUsed: 0,
+          maxCost: tierInfo.costPerToken ? 5.0 : Infinity,
+          maxTokens: tierInfo.maxTokens || 2048
+        });
+      }
+    }
+
+    function canCall(agentId, model) {
+      initBudget(agentId, model);
+      const b = state.agentBudgets.get(agentId);
+      if (b.calls >= b.maxCalls) {
+        updateBudgetIndicator(agentId, b, model);
+        showNotification(`Budget exceeded for ${getAgentName(model)}`, 'error');
+        return false;
+      }
+      b.calls++;
+      updateBudgetIndicator(agentId, b, model);
+      return true;
+    }
+
+    function updateBudgetIndicator(agentId, budget, model) {
+      if (!budget) return;
+      const agentElement = document.querySelector(`[data-agent-id="${agentId}"]`);
+      if (!agentElement) return;
+      let indicator = agentElement.querySelector('.budget-indicator');
+      if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.className = 'budget-indicator';
+        agentElement.appendChild(indicator);
+      }
+      const tierInfo = modelTiers[model];
+      if (budget.calls >= budget.maxCalls) {
+        indicator.textContent = `Budget exceeded • $${budget.cost.toFixed(2)}`;
+        indicator.className = 'budget-indicator budget-exceeded';
+      } else if (budget.calls > budget.maxCalls * 0.8) {
+        indicator.textContent = `Budget warning • $${budget.cost.toFixed(2)}`;
+        indicator.className = 'budget-indicator budget-warning';
+      } else {
+        indicator.textContent = `${budget.calls}/${budget.maxCalls} • $${budget.cost.toFixed(2)}`;
+        indicator.className = 'budget-indicator';
+      }
+    }
+
+    // Metrics functions
+    function recordMetric(agentId, model, ms, tokens = 0) {
+      const m = state.agentMetrics.get(agentId) || { 
+        count: 0, 
+        avgMs: 0, 
+        tokens: 0,
+        cost: 0,
+        errors: 0
+      };
+      m.avgMs = (m.avgMs * m.count + ms) / (m.count + 1);
+      m.tokens += tokens;
+      m.count++;
+      
+      // Calculate cost
+      const tierInfo = modelTiers[model];
+      if (tierInfo?.costPerToken) {
+        const cost = tokens * tierInfo.costPerToken;
+        m.cost += cost;
+        state.globalBudget.currentCost += cost;
+        state.globalBudget.tokens += tokens;
+        
+        // Update agent budget
+        const budget = state.agentBudgets.get(agentId);
+        if (budget) {
+          budget.tokensUsed += tokens;
+          budget.cost += cost;
+        }
+      }
+      
+      state.agentMetrics.set(agentId, m);
+    }
+
+    // Visual Pyramid
+    function renderPyramid(tiers) {
+      const svg = `
+        <svg width="260" height="200" style="margin-top: 15px;">
+          <defs>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+              <feMerge>
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+          <polygon points="130,10 250,190 10,190" fill="#4e54c8" opacity="0.6" filter="url(#glow)"/>
+          <text x="130" y="30" text-anchor="middle" fill="white" font-size="14" font-weight="bold">Colossi: ${tiers.Colossi}</text>
+          <text x="130" y="70" text-anchor="middle" fill="white" font-size="14" font-weight="bold">Titans: ${tiers.Titans}</text>
+          <text x="130" y="110" text-anchor="middle" fill="white" font-size="14" font-weight="bold">Architects: ${tiers.Architects}</text>
+          <text x="130" y="150" text-anchor="middle" fill="white" font-size="14" font-weight="bold">Builders: ${tiers.Builders}</text>
+          <text x="130" y="180" text-anchor="middle" fill="white" font-size="14" font-weight="bold">Scouts: ${tiers.Scouts}</text>
+        </svg>`;
+      const pyramidContainer = document.getElementById("pyramid-chart");
+      if (pyramidContainer) {
+        pyramidContainer.innerHTML = svg;
+      }
+    }
+
+    function renderMetrics() {
+      const out = [];
+      // Global budget
+      const budgetPercent = (state.globalBudget.currentCost / state.globalBudget.maxCost) * 100;
+      const budgetClass = budgetPercent > 90 ? 'budget-exceeded' : budgetPercent > 70 ? 'budget-warning' : '';
+      out.push(`<div class="metric-item">
+        <span class="metric-label">Session Budget</span>
+        <span class="metric-value ${budgetClass}">$${state.globalBudget.currentCost.toFixed(2)} / $${state.globalBudget.maxCost.toFixed(2)}</span>
+      </div>`);
+      out.push(`<div class="metric-item">
+        <span class="metric-label">Total Tokens</span>
+        <span class="metric-value">${state.globalBudget.tokens}</span>
+      </div>`);
+      out.push('<hr style="margin: 10px 0; border: none; border-top: 1px solid rgba(255,255,255,0.2);">');
+      
+      // Per-agent metrics
+      state.activeAgents.forEach(agent => {
+        const metrics = state.agentMetrics.get(agent.id);
+        if (!metrics) return;
+        
+        const avgLatency = metrics.avgMs ? metrics.avgMs.toFixed(0) : '0';
+        const successRate = ((metrics.count - metrics.errors) / metrics.count * 100).toFixed(1);
+        const tokens = metrics.tokens;
+        const cost = metrics.cost.toFixed(3);
+        
+        out.push(`<div class="metric-item">
+          <div style="font-weight: bold; margin-bottom: 5px;">
+            ${agent.name} ${getTierBadge(agent.model)}
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">Avg Latency</span>
+            <span class="metric-value">${avgLatency}ms</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">Success Rate</span>
+            <span class="metric-value">${successRate}%</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">Tokens</span>
+            <span class="metric-value">${tokens}</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">Cost</span>
+            <span class="metric-value">$${cost}</span>
+          </div>
+          <hr style="margin: 8px 0; border: none; border-top: 1px solid rgba(255,255,255,0.1);">
+        </div>`);
+      });
+      
+      elements.metricsContent.innerHTML = out.join("");
+      
+      // Add pyramid visualization at the end
+      const tiers = {
+        Colossi: 0,
+        Titans: 0,
+        Architects: 0,
+        Builders: 0,
+        Scouts: 0
+      };
+      
+      // Count agents by tier/category
+      state.activeAgents.forEach(agent => {
+        const model = agent.model;
+        const tierInfo = modelTiers[model] || { tier: 'local' };
+        const size = parseFloat(model.split(':')[1]) || 0;
+        
+        if (tierInfo.tier === 'premium' || model.includes('kimi')) {
+          tiers.Colossi++;
+        } else if (tierInfo.tier === 'cloud') {
+          if (size >= 400) tiers.Colossi++;
+          else if (size >= 100) tiers.Titans++;
+          else tiers.Architects++;
+        } else { // local
+          if (size >= 10) tiers.Architects++;
+          else if (size >= 5) tiers.Builders++;
+          else tiers.Scouts++;
+        }
+      });
+      
+      // Include primary model in count
+      const primaryModel = elements.primaryModelSelect.value;
+      const primaryTierInfo = modelTiers[primaryModel] || { tier: 'local' };
+      const primarySize = parseFloat(primaryModel.split(':')[1]) || 0;
+      
+      if (primaryTierInfo.tier === 'premium' || primaryModel.includes('kimi')) {
+        tiers.Colossi++;
+      } else if (primaryTierInfo.tier === 'cloud') {
+        if (primarySize >= 400) tiers.Colossi++;
+        else if (primarySize >= 100) tiers.Titans++;
+        else tiers.Architects++;
+      } else { // local
+        if (primarySize >= 10) tiers.Architects++;
+        else if (primarySize >= 5) tiers.Builders++;
+        else tiers.Scouts++;
+      }
+      
+      renderPyramid(tiers);
+    }
+
+    // Show notification
+    function showNotification(message, type = 'info') {
+      const notification = document.createElement('div');
+      notification.className = `message ${type === 'error' ? 'error-message' : 'success-message'}`;
+      notification.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 1000; max-width: 300px; transition: opacity 0.3s, transform 0.3s;';
+      notification.innerHTML = `<div class="message-content">${message}</div>`;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateY(-20px)';
+        setTimeout(() => notification.remove(), 300);
+      }, 3000);
+    }
+
+    // Safe markdown rendering
+    function safeMarkdown(md) {
+      const html = marked.parse(md, { breaks: true, gfm: true });
+      return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+    }
+
+    // Add agent
+    function addAgent() {
+      const selectedModel = elements.agentModelSelect.value;
+      const agentName = getAgentName(selectedModel);
+
+      if (state.activeAgents.some(agent => agent.model === selectedModel)) {
+        showNotification('Agent already exists!', 'error');
+        return;
+      }
+
+      const agent = {
+        id: state.agentIdCounter++,
+        name: agentName,
+        model: selectedModel,
+        tier: modelTiers[selectedModel]?.tier || 'local',
+        queue: [],
+        isProcessing: false
+      };
+
+      state.activeAgents.push(agent);
+      state.responseQueues[agent.id] = [];
+      
+      // Initialize budget and metrics
+      initBudget(agent.id, selectedModel);
+      state.agentMetrics.set(agent.id, {
+        count: 0,
+        avgMs: 0,
+        tokens: 0,
+        cost: 0,
+        errors: 0
+      });
+
+      updateAgentsList();
+      showNotification(`Added ${agentName}`, 'success');
+      renderMetrics();
+    }
+
+    // Update agents list UI
+    function updateAgentsList() {
+      elements.activeAgentsList.innerHTML = '';
+      
+      if (state.activeAgents.length === 0) {
+        elements.activeAgentsList.innerHTML = '<div class="no-active-agents">No assistant agents added yet</div>';
+      } else {
+        state.activeAgents.forEach(agent => {
+          const agentElement = document.createElement('div');
+          agentElement.className = 'agent-item';
+          agentElement.setAttribute('role', 'listitem');
+          agentElement.setAttribute('data-agent-id', agent.id);
+          
+          const budget = state.agentBudgets.get(agent.id);
+          let budgetClass = '';
+          let budgetText = '';
+          if (budget) {
+            if (budget.cost >= budget.maxCost) {
+              budgetClass = 'budget-exceeded';
+              budgetText = 'BUDGET EXCEEDED';
+            } else if (budget.cost > budget.maxCost * 0.8) {
+              budgetClass = 'budget-warning';
+              budgetText = `Budget: ${budget.cost.toFixed(2)}/${budget.maxCost.toFixed(2)}`;
+            }
+          }
+
+          agentElement.innerHTML = `
+            <div class="agent-info">
+              <div class="agent-name">
+                ${agent.name}
+                ${getTierBadge(agent.model)}
+              </div>
+              <div class="agent-model">${agent.model}</div>
+              ${budgetText ? `<div class="budget-indicator ${budgetClass}">${budgetText}</div>` : ''}
+            </div>
+            <button class="remove-agent" data-id="${agent.id}" aria-label="Remove ${agent.name}">
+              <i class="fas fa-times"></i>
+            </button>
+          `;
+          elements.activeAgentsList.appendChild(agentElement);
+        });
+
+        document.querySelectorAll('.remove-agent').forEach(button => {
+          button.addEventListener('click', function() {
+            const agentId = parseInt(this.getAttribute('data-id'));
+            removeAgent(agentId);
+          });
+        });
+      }
+
+      elements.agentsCount.textContent = `${state.activeAgents.length} assistant${state.activeAgents.length !== 1 ? 's' : ''}`;
+    }
+
+    // Remove agent
+    function removeAgent(agentId) {
+      const agent = state.activeAgents.find(a => a.id === agentId);
+      if (agent) {
+        state.activeAgents = state.activeAgents.filter(a => a.id !== agentId);
+        delete state.responseQueues[agentId];
+        state.agentMetrics.delete(agentId);
+        state.agentBudgets.delete(agentId);
+        updateAgentsList();
+        showNotification(`Removed ${agent.name}`, 'success');
+        renderMetrics();
+      }
+    }
+
+    // Add message to chat
+    function addMessage(text, isUser, agentName = null, model = null) {
+      const messageData = {
+        text: text,
+        isUser: isUser,
+        agentName: agentName,
+        model: model,
+        timestamp: new Date().toISOString(),
+        id: Date.now() + Math.random()
+      };
+
+      state.chatHistory.push(messageData);
+
+      if (state.messageVirtualization.enabled && state.chatHistory.length > state.messageVirtualization.maxMessages) {
+        const oldMessage = state.chatHistory[state.chatHistory.length - state.messageVirtualization.maxMessages - 1];
+        if (oldMessage) {
+          state.messageVirtualization.virtualizedMessages.push(oldMessage);
+        }
+      }
+
+      renderMessage(messageData);
+
+      if (!isUser && document.getElementById('auto-speak').checked && !state.isSpeaking) {
+        speakText(text);
+      }
+    }
+
+    // Render a single message
+    function renderMessage(messageData) {
+      const messageDiv = document.createElement('div');
+      messageDiv.classList.add('message', messageData.isUser ? 'user-message' : 'ai-message');
+      messageDiv.dataset.messageId = messageData.id;
+
+      const header = document.createElement('div');
+      header.classList.add('message-header');
+      header.innerHTML = messageData.isUser 
+        ? '<i class="fas fa-user"></i> User' 
+        : `<i class="fas fa-robot"></i> ${messageData.agentName || getAgentName(elements.primaryModelSelect.value)}`;
+
+      const content = document.createElement('div');
+      content.classList.add('message-content');
+      content.innerHTML = messageData.isUser 
+        ? messageData.text 
+        : safeMarkdown(messageData.text);
+
+      messageDiv.appendChild(header);
+      messageDiv.appendChild(content);
+
+      elements.chatMessages.appendChild(messageDiv);
+      elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+    }
+
+    // Show agent typing indicator
+    function showAgentTyping(model, agentId = null) {
+      const agentName = getAgentName(model);
+      const typingId = `typing-${(agentId || model).toString().replace(/[^a-zA-Z0-9]/g, '-')}`;
+      
+      hideAgentTyping(model, agentId);
+      
+      const typingElement = document.createElement('div');
+      typingElement.className = 'agent-typing';
+      typingElement.id = typingId;
+      typingElement.innerHTML = `
+        <div class="agent-name">${agentName}</div>
+        <div class="typing-dots">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      `;
+      elements.typingAgents.appendChild(typingElement);
+    }
+
+    // Hide agent typing indicator
+    function hideAgentTyping(model, agentId = null) {
+      const typingId = `typing-${(agentId || model).toString().replace(/[^a-zA-Z0-9]/g, '-')}`;
+      const typingElement = document.getElementById(typingId);
+      if (typingElement) {
+        typingElement.style.opacity = '0';
+        setTimeout(() => typingElement.remove(), 300);
+      }
+    }
+
+    // Get AI response from backend
+    async function getAIResponseStream(userMessage, model, agentId = null) {
+      // Check budget before calling
+      if (agentId && !canCall(agentId, model)) {
+        return { text: "(Budget exceeded - call blocked)", tokens: 0 };
+      }
+
+      const startTime = performance.now();
+      const payload = { model, prompt: userMessage, stream: true };
+
+      try {
+        const response = await fetch("http://localhost:3000/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok || !response.body) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let fullText = '';
+        let buffer = '';
+        let tokenCount = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+          
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const json = JSON.parse(line);
+              if (json.response) {
+                fullText += json.response;
+                tokenCount++;
+              }
+            } catch (e) {
+              console.warn('Failed to parse JSON line:', line, e);
+            }
+          }
+        }
+
+        const endTime = performance.now();
+        const latency = endTime - startTime;
+
+        // Record metric
+        if (agentId) {
+          recordMetric(agentId, model, Math.round(latency), tokenCount);
+        }
+
+        return { text: fullText || "(No response received)", tokens: tokenCount };
+      } catch (err) {
+        const endTime = performance.now();
+        const latency = endTime - startTime;
+        
+        // Record failed metric
+        if (agentId) {
+          recordMetric(agentId, model, Math.round(latency), 0);
+        }
+        
+        return { text: `(Error: ${err.message})`, tokens: 0 };
+      }
+    }
+
+    // Process agent queue
+    async function processAgentQueue(agent) {
+      if (agent.isProcessing || state.responseQueues[agent.id].length === 0) return;
+
+      agent.isProcessing = true;
+      const { message, messageId } = state.responseQueues[agent.id].shift();
+
+      try {
+        showAgentTyping(agent.model, agent.id);
+        const response = await getAIResponseStream(message, agent.model, agent.id);
+        hideAgentTyping(agent.model, agent.id);
+        
+        addMessage(response.text, false, agent.name, agent.model);
+        
+        // Check budget guardrails
+        const budget = state.agentBudgets.get(agent.id);
+        if (budget && budget.cost >= budget.maxCost) {
+          showNotification(`${agent.name} budget exceeded!`, 'error');
+        }
+      } catch (err) {
+        hideAgentTyping(agent.model, agent.id);
+        addMessage(`Error: ${err.message}`, false, agent.name, agent.model);
+      } finally {
+        agent.isProcessing = false;
+        setTimeout(() => processAgentQueue(agent), 100);
+      }
+    }
+
+    // Send message to all models
+    async function sendMessage() {
+      const message = elements.userInput.value.trim();
+      if (!message || state.isProcessing) return;
+
+      elements.userInput.value = '';
+      addMessage(message, true);
+
+      state.isProcessing = true;
+      elements.userInput.disabled = true;
+      elements.sendButton.disabled = true;
+
+      const primaryModel = elements.primaryModelSelect.value;
+      const allAgents = [
+        { id: 'primary', name: getAgentName(primaryModel), model: primaryModel, tier: modelTiers[primaryModel]?.tier || 'local', isProcessing: false },
+        ...state.activeAgents
+      ];
+
+      const messageId = Date.now();
+      allAgents.forEach(agent => {
+        if (!state.responseQueues[agent.id]) {
+          state.responseQueues[agent.id] = [];
+        }
+        state.responseQueues[agent.id].push({ message, messageId });
+        processAgentQueue(agent);
+      });
+
+      setTimeout(() => {
+        state.isProcessing = false;
+        elements.userInput.disabled = false;
+        elements.sendButton.disabled = false;
+        elements.userInput.focus();
+      }, 500);
+    }
+
+    // Handle media upload
+    function handleMediaUpload(file) {
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('message', 'user-message');
+        
+        const messageHeader = document.createElement('div');
+        messageHeader.classList.add('message-header');
+        messageHeader.innerHTML = '<i class="fas fa-user"></i> User';
+        
+        const messageContent = document.createElement('div');
+        messageContent.classList.add('message-content');
+        
+        if (file.type.startsWith('image/')) {
+          messageContent.innerHTML = `<img src="${e.target.result}" alt="Uploaded image">`;
+        } else if (file.type.startsWith('video/')) {
+          messageContent.innerHTML = `<video controls src="${e.target.result}"></video>`;
+        } else {
+          messageContent.textContent = `Uploaded file: ${file.name}`;
+        }
+        
+        messageDiv.appendChild(messageHeader);
+        messageDiv.appendChild(messageContent);
+        elements.chatMessages.appendChild(messageDiv);
+        elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+      };
+      
+      reader.readAsDataURL(file);
+    }
+
+    // Text-to-speech functions
+    function speakText(text) {
+      if (state.isSpeaking) {
+        stopSpeaking();
+      }
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.onstart = () => {
+        state.isSpeaking = true;
+        elements.speakButton.classList.add('speak-active');
+      };
+      utterance.onend = () => {
+        state.isSpeaking = false;
+        elements.speakButton.classList.remove('speak-active');
+      };
+      utterance.onerror = (e) => {
+        console.error('Speech synthesis error:', e);
+        state.isSpeaking = false;
+        elements.speakButton.classList.remove('speak-active');
+      };
+
+      state.synth.speak(utterance);
+    }
+
+    function stopSpeaking() {
+      state.synth.cancel();
+      state.isSpeaking = false;
+      elements.speakButton.classList.remove('speak-active');
+    }
+
+    // Chat history functions
+    function saveChat() {
+      if (state.chatHistory.length === 0) {
+        showNotification('No chat to save!', 'error');
+        return;
+      }
+
+      const chatName = elements.chatNameInput.value.trim() || `Chat ${new Date().toLocaleString()}`;
+      const chatData = {
+        name: chatName,
+        history: state.chatHistory,
+        timestamp: new Date().toISOString(),
+        primaryModel: elements.primaryModelSelect.value,
+        activeAgents: state.activeAgents,
+        metrics: Array.from(state.agentMetrics.entries()),
+        budgets: Array.from(state.agentBudgets.entries()),
+        globalBudget: state.globalBudget
+      };
+
+      try {
+        let savedChats = JSON.parse(localStorage.getItem('savedChats') || '[]');
+        savedChats.push(chatData);
+        localStorage.setItem('savedChats', JSON.stringify(savedChats));
+        
+        elements.chatNameInput.value = '';
+        updateSavedChatsList();
+        showNotification(`Chat "${chatName}" saved successfully!`, 'success');
+      } catch (err) {
+        showNotification('Failed to save chat: ' + err.message, 'error');
+      }
+    }
+
+    function loadChat(chatData) {
+      try {
+        // Clear current chat
+        elements.chatMessages.innerHTML = '';
+        state.chatHistory = [];
+        state.activeAgents = [];
+        state.agentMetrics.clear();
+        state.agentBudgets.clear();
+        state.globalBudget = { maxCost: 10.0, currentCost: 0, tokens: 0 };
+        
+        // Restore agents
+        if (chatData.activeAgents) {
+          state.activeAgents = chatData.activeAgents;
+          state.agentIdCounter = Math.max(...chatData.activeAgents.map(a => a.id)) + 1;
+          // Reinitialize queues, metrics and budgets
+          chatData.activeAgents.forEach(agent => {
+            state.responseQueues[agent.id] = [];
+            const savedMetric = chatData.metrics?.find?.(([id]) => id === agent.id)?.[1] || {
+              count: 0, avgMs: 0, tokens: 0, cost: 0, errors: 0
+            };
+            state.agentMetrics.set(agent.id, savedMetric);
+            
+            const savedBudget = chatData.budgets?.find?.(([id]) => id === agent.id)?.[1] || {
+              calls: 0, maxCalls: 100, cost: 0, tokensUsed: 0, maxCost: modelTiers[agent.model]?.costPerToken ? 5.0 : Infinity, maxTokens: modelTiers[agent.model]?.maxTokens || 2048
+            };
+            state.agentBudgets.set(agent.id, savedBudget);
+          });
+          updateAgentsList();
+        }
+        
+        // Restore primary model
+        if (chatData.primaryModel) {
+          elements.primaryModelSelect.value = chatData.primaryModel;
+        }
+        
+        // Restore budget
+        if (chatData.globalBudget) {
+          state.globalBudget = { ...state.globalBudget, ...chatData.globalBudget };
+        }
+        
+        // Render messages
+        state.chatHistory = chatData.history || [];
+        renderVisibleMessages();
+        
+        elements.chatHistoryMenu.style.display = 'none';
+        showNotification('Chat loaded successfully!', 'success');
+        renderMetrics();
+      } catch (err) {
+        showNotification('Failed to load chat: ' + err.message, 'error');
+      }
+    }
+
+    function updateSavedChatsList() {
+      try {
+        const savedChats = JSON.parse(localStorage.getItem('savedChats') || '[]');
+        elements.savedChatsList.innerHTML = '';
+        
+        if (savedChats.length === 0) {
+          elements.savedChatsList.innerHTML = '<div class="saved-chat-item">No saved chats yet</div>';
+        } else {
+          savedChats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+          
+          savedChats.forEach((chat, index) => {
+            const chatItem = document.createElement('div');
+            chatItem.className = 'saved-chat-item';
+            chatItem.innerHTML = `
+              <div style="font-weight: bold;">${chat.name}</div>
+              <div style="font-size: 0.8rem; opacity: 0.7;">${new Date(chat.timestamp).toLocaleString()}</div>
+            `;
+            chatItem.addEventListener('click', () => {
+              if (confirm(`Load chat "${chat.name}"? This will replace the current conversation.`)) {
+                loadChat(chat);
+              }
+            });
+            elements.savedChatsList.appendChild(chatItem);
+          });
+        }
+      } catch (err) {
+        console.error('Failed to update saved chats list:', err);
+      }
+    }
+
+    // Render visible messages (virtualization)
+    function renderVisibleMessages() {
+      const container = elements.chatMessages;
+      container.innerHTML = '';
+      
+      const start = Math.max(0, state.chatHistory.length - state.messageVirtualization.maxMessages);
+      const visibleMessages = state.chatHistory.slice(start);
+      
+      visibleMessages.forEach(msg => {
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('message', msg.isUser ? 'user-message' : 'ai-message');
+        messageDiv.dataset.messageId = msg.id;
+
+        const header = document.createElement('div');
+        header.classList.add('message-header');
+        header.innerHTML = msg.isUser 
+          ? '<i class="fas fa-user"></i> User' 
+          : `<i class="fas fa-robot"></i> ${msg.agentName || getAgentName(elements.primaryModelSelect.value)}`;
+
+        const content = document.createElement('div');
+        content.classList.add('message-content');
+        content.innerHTML = msg.isUser 
+          ? msg.text 
+          : safeMarkdown(msg.text);
+
+        messageDiv.appendChild(header);
+        messageDiv.appendChild(content);
+        container.appendChild(messageDiv);
+      });
+      
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // Event listeners
+    elements.addAgentBtn.addEventListener('click', addAgent);
+    
+    elements.sendButton.addEventListener('click', sendMessage);
+    elements.userInput.addEventListener('keypress', debounce((e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }, 100));
+
+    elements.uploadButton.addEventListener('click', () => elements.fileUpload.click());
+    elements.fileUpload.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (file) handleMediaUpload(file);
+      e.target.value = '';
+    });
+
+    elements.toolsButton.addEventListener('click', () => {
+      elements.toolsMenu.style.display = elements.toolsMenu.style.display === 'block' ? 'none' : 'block';
+    });
+
+    elements.historyButton.addEventListener('click', () => {
+      elements.chatHistoryMenu.style.display = elements.chatHistoryMenu.style.display === 'block' ? 'none' : 'block';
+      updateSavedChatsList();
+    });
+
+    elements.metricsButton.addEventListener('click', () => {
+      elements.metricsPanel.style.display = elements.metricsPanel.style.display === 'block' ? 'none' : 'block';
+      renderMetrics();
+    });
+
+    document.addEventListener('click', e => {
+      if (!elements.toolsMenu.contains(e.target) && !elements.toolsButton.contains(e.target)) {
+        elements.toolsMenu.style.display = 'none';
+      }
+      if (!elements.chatHistoryMenu.contains(e.target) && !elements.historyButton.contains(e.target)) {
+        elements.chatHistoryMenu.style.display = 'none';
+      }
+      if (!elements.metricsPanel.contains(e.target) && !elements.metricsButton.contains(e.target)) {
+        elements.metricsPanel.style.display = 'none';
+      }
+    });
+
+    elements.speakButton.addEventListener('click', () => {
+      if (state.isSpeaking) {
+        stopSpeaking();
+      } else {
+        const aiMessages = elements.chatMessages.querySelectorAll('.ai-message');
+        if (aiMessages.length > 0) {
+          const lastMessage = aiMessages[aiMessages.length - 1];
+          const text = lastMessage.querySelector('.message-content').textContent;
+          if (text.trim() !== '') {
+            speakText(text);
+          }
+        }
+      }
+    });
+
+    elements.saveChatButton.addEventListener('click', saveChat);
+    elements.loadChatButton.addEventListener('click', () => elements.loadChatFile.click());
+    
+    elements.loadChatFile.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          try {
+            const chatData = JSON.parse(e.target.result);
+            if (confirm('Load chat from file? This will replace the current conversation.')) {
+              loadChat(chatData);
+            }
+          } catch (err) {
+            showNotification('Error loading chat file: ' + err.message, 'error');
+          }
+        };
+        reader.readAsText(file);
+      }
+      e.target.value = '';
+    });
+
+    // Scroll virtualization
+    let scrollDebounce = debounce(() => {
+      if (state.messageVirtualization.enabled && state.chatHistory.length > state.messageVirtualization.maxMessages) {
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(() => renderVisibleMessages(), { timeout: 500 });
+        }
+      }
+    }, 100);
+
+    elements.chatMessages.addEventListener('scroll', scrollDebounce);
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      updateAgentsList();
+      updateSavedChatsList();
+      renderMetrics();
+      elements.userInput.focus();
+    });
+
+    // Handle page unload
+    window.addEventListener('beforeunload', () => {
+      if (state.isSpeaking) {
+        stopSpeaking();
+      }
+    });
+  </script>
+</body>
+</html>
